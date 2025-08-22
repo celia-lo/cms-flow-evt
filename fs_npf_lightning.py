@@ -287,19 +287,31 @@ class FlowNumPFLightning(LightningModule):
 
         self.validation_step_outputs.append(return_dict)
 
+    # def on_train_epoch_end(self):
+    #     if self.config["lr_scheduler"] is not False:
+    #         self.log("lr", self.lr_schedulers().get_last_lr()[0], sync_dist=True)
+    #         self.lr_schedulers().step()
     def on_train_epoch_end(self):
-        if self.config["lr_scheduler"] is not False:
-            self.log("lr", self.lr_schedulers().get_last_lr()[0], sync_dist=True)
-            self.lr_schedulers().step()
+        if self.config["lr_scheduler"] is not False and not getattr(self.trainer, "sanity_checking", False):
+            sched = self.lr_schedulers()
+            if sched is not None:
+                self.log("lr", sched.get_last_lr()[0], sync_dist=True)
+                sched.step()
 
     def on_validation_epoch_end(self):
         outputs = self.validation_step_outputs
         losses = np.mean([x["total_loss"] for x in outputs])
 
-        self.log("val_loss_avg", losses, sync_dist=True)
+        self.log("val_loss_avg", losses, sync_dist=True, on_epoch=True, prog_bar=True)
+        if self.global_rank == 0:
+            print(f"[VAL] Epoch {self.current_epoch} - val_loss_avg: {losses:.6f}")
 
         if self.config["lr_scheduler"] is not False:
-            self.log("lr", self.lr_schedulers().get_last_lr()[0], sync_dist=True)
+            # self.log("lr", self.lr_schedulers().get_last_lr()[0], sync_dist=True)
+            if getattr(self.trainer, "sanity_checking", False) is False:
+                sched = self.lr_schedulers()
+                if sched is not None:
+                    self.log("lr", sched.get_last_lr()[0], sync_dist=True)
 
         pf_ht = torch.cat([x["pf_ht"] for x in outputs], dim=0)
         fs_ht = torch.cat([x["fs_ht"] for x in outputs], dim=0)
@@ -322,7 +334,8 @@ class FlowNumPFLightning(LightningModule):
         fss = torch.stack([fs_ht, fs_met_x, fs_met_y, n_fs], dim=-1).numpy()
         trs = torch.stack([tr_ht, tr_met_x, tr_met_y, n_tr], dim=-1).numpy()
 
-        self.log_image(pfs, fss, trs)
+        if hasattr(self.logger, "experiment") and hasattr(self.logger.experiment, "log_image"):
+            self.log_image(pfs, fss, trs)
 
         self.validation_step_outputs.clear()
 

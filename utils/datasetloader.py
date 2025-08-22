@@ -469,7 +469,8 @@ class FastSimDataset(Dataset):
         )
         pflow_data = do_padding(pflow_data, self.max_particles)
         mask = torch.stack([truth_mask, pflow_mask], -1)
-        mask = mask.bool()
+        # mask = mask.bool()
+        mask = mask.to(torch.float32)
 
         global_data = torch.stack(list(global_data.values()), -1).to(torch.float32)
 
@@ -555,6 +556,8 @@ class FastSimDataset(Dataset):
             pflow_data = torch.zeros_like(pflow_data).float()
             truth_mask = torch.zeros(self.max_particles, dtype=bool)
             global_data = torch.zeros_like(global_data).float()
+
+        truth_mask = truth_mask.to(torch.float32)
         return truth_data, pflow_data, truth_mask, global_data
 
     def get_eval_data(self, idx):
@@ -592,10 +595,38 @@ class FastSimDataset(Dataset):
     def __len__(self):
         return len(self.n_truth_particles)
 
+    # def __getitem__(self, idx):
+    #     if self.mode == "eval":
+    #         return self.get_eval_data(idx)
+    #     if self.train_type == "particle":
+    #         return self.get_particle_data(idx)
+    #     elif self.train_type == "evt":
+    #         return self.get_event_data(idx)
     def __getitem__(self, idx):
         if self.mode == "eval":
-            return self.get_eval_data(idx)
-        if self.train_type == "particle":
-            return self.get_particle_data(idx)
+            item = self.get_eval_data(idx)
+        elif self.train_type == "particle":
+            item = self.get_particle_data(idx)
         elif self.train_type == "evt":
-            return self.get_event_data(idx)
+            item = self.get_event_data(idx)
+        else:
+            raise ValueError(f"Unknown train_type: {self.train_type}")
+
+        self.type_check_debug(item, idx)
+        return item
+
+    def type_check_debug(self, item, idx):
+        if isinstance(item, tuple):
+            iterator = enumerate(item)
+        elif isinstance(item, dict):
+            iterator = item.items()
+        else:
+            print(f"⚠️ Skipping check: unexpected type at idx {idx}: {type(item)}")
+            return
+
+        for k, v in iterator:
+            if isinstance(v, torch.Tensor) and v.dtype == torch.bool:
+                print(f"\n❌ Boolean tensor at idx {idx}")
+                print(f"Key: {k}, Shape: {v.shape}, Sample values: {v.flatten()[:10]}")
+                torch.save({"idx": idx, "key": k, "data": v, "full_item": item}, f"bad_event_{idx}.pt")
+                raise TypeError(f"Boolean tensor in batch (key: {k}) at idx {idx}")

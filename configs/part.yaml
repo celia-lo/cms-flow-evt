@@ -1,3 +1,4 @@
+logger: none
 name: rcfm_cms_part
 sigma: 0.0001
 n_steps: 25
@@ -6,7 +7,8 @@ flow_type: rcfm
 model_type: knn
 use_knn: false
 
-num_epochs: 500
+# num_epochs: 500
+num_epochs: 300
 learningrate: 3e-5
 opt: lion
 loss_type: mse_and_direction
@@ -27,22 +29,39 @@ sin_cos: true
 
 time_factor: 1000
 
-reduce_ds_train: 2_800_000
-reduce_ds_valid: 35000
-eval_num_events: 10000
+# reduce_ds_train: 2_800_000
+# reduce_ds_valid: 35000
+# eval_num_events: 10000
+
+# reduce_ds_train: 300000
+# reduce_ds_valid: 50000
+# eval_num_events: 50000
+
+reduce_ds_train: 795000
+reduce_ds_valid: 99000
+eval_num_events: 99916
 
 entry_start_train: 0
-entry_start_valid: 2_800_000
-entry_start_test: 0
+# entry_start_valid: 2_800_000
+# entry_start_test: 0
+# entry_start_valid: 300000
+# entry_start_test: 350000
+entry_start_valid: 795000
+entry_start_test: 894000
 
 num_workers: 6
 batchsize: 128
 val_batchsize: 1000
 
-eval_dir: /storage/agrp/dmitrykl/fastsim/FS_evals/
-truth_path_train: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-470to600_TTbar_Merged/merged_train_v2_pt025_eta27_ghost.root
-truth_path_valid: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-470to600_TTbar_Merged/merged_train_v2_pt025_eta27_ghost.root
-truth_path_test: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-600to800_TuneZ2_7TeV_pythia6/merged_test_small_v2_pt025_eta27_ghost.root
+# eval_dir: /storage/agrp/dmitrykl/fastsim/FS_evals/
+# truth_path_train: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-470to600_TTbar_Merged/merged_train_v2_pt025_eta27_ghost.root
+# truth_path_valid: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-470to600_TTbar_Merged/merged_train_v2_pt025_eta27_ghost.root
+# truth_path_test: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-600to800_TuneZ2_7TeV_pythia6/merged_test_small_v2_pt025_eta27_ghost.root
+
+eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/FS_evals/
+truth_path_train: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+truth_path_valid: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+truth_path_test: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
 
 max_particles: 400
 

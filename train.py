@@ -80,15 +80,36 @@ def update_config(args, config):
     return config
 
 
+# def setup_logger(args, config):
+#     """
+#     Handle logging for the DDP multi-gpu training.
+#     I think this is really a bug on comet's end that they don't
+#     automatically group the experiments...
+#     """
+
+#     # no logging
+#     if args.test_run or args.no_logging:
+#         return None
+
+#     # need to set up a new experiment
+#     comet_logger = setup_comet_logger(config, args, os.environ.get("COMET_EXP_ID"))
+#     if comet_logger.experiment.get_key():
+#         os.environ["COMET_EXP_ID"] = comet_logger.experiment.get_key()
+
+#     return comet_logger
+
+
 def setup_logger(args, config):
     """
     Handle logging for the DDP multi-gpu training.
-    I think this is really a bug on comet's end that they don't
-    automatically group the experiments...
     """
 
     # no logging
     if args.test_run or args.no_logging:
+        return None
+
+    # allow disabling logger via config
+    if config.get("logger", "").lower() == "none":
         return None
 
     # need to set up a new experiment

@@ -259,10 +259,12 @@ class FlowLightning(LightningModule):
     def on_validation_epoch_end(self):
         outputs = self.validation_step_outputs
         avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
-        self.log("val_loss_avg", avg_loss, sync_dist=True)
+        self.log("val_loss_avg", avg_loss, sync_dist=True, on_epoch=True, prog_bar=True)
+        if self.global_rank == 0:
+            print(f"[VAL] Epoch {self.current_epoch} - val_loss_avg: {avg_loss.item():.6f}")
         if self.current_epoch % 5 == 0:
             avg_pred_loss = torch.stack([x["pred_total_loss"] for x in outputs]).mean()
-            self.log("pred_loss_avg", avg_pred_loss, sync_dist=True)
+            self.log("pred_loss_avg", avg_pred_loss, sync_dist=True, on_epoch=True, prog_bar=True)
         if self.config["lr_scheduler"] is not False:
             self.log("lr", self.lr_schedulers().get_last_lr()[0], sync_dist=True)
 
@@ -297,9 +299,10 @@ class FlowLightning(LightningModule):
             ],
             dim=-1,
         )
-
-        val_jet_pt_mse = self.log_image(truth, pflow, mask, global_data, fs, fs_mask)
-        self.log("val_jet_pt_mse", val_jet_pt_mse, sync_dist=True)
+        if hasattr(self.logger, "experiment") and hasattr(self.logger.experiment, "log_image"):
+            val_jet_pt_mse = self.log_image(truth, pflow, mask, global_data, fs, fs_mask)
+        if "val_jet_pt_mse" in locals():
+            self.log("val_jet_pt_mse", val_jet_pt_mse, sync_dist=True)
 
         self.validation_step_outputs.clear()
 
