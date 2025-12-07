@@ -1,7 +1,7 @@
 logger: none
 name: rcfm_cms_part
 sigma: 0.0001
-n_steps: 25
+n_steps: 10
 train_type: particle
 flow_type: rcfm
 model_type: knn
@@ -37,17 +37,39 @@ time_factor: 1000
 # reduce_ds_valid: 50000
 # eval_num_events: 50000
 
-reduce_ds_train: 795000
-reduce_ds_valid: 99000
-eval_num_events: 99916
+# reduce_ds_train: 795000
+# reduce_ds_valid: 99000
+# eval_num_events: 99916
+
+# reduce_ds_train: 948831
+# reduce_ds_valid: 49938
+# eval_num_events: 49938
+
+# reduce_ds_train: 494904
+# reduce_ds_valid: 123727
+# eval_num_events: 123727
+
+reduce_ds_train: 2426081
+reduce_ds_valid: 606520
+eval_num_events: 606520
 
 entry_start_train: 0
 # entry_start_valid: 2_800_000
 # entry_start_test: 0
 # entry_start_valid: 300000
 # entry_start_test: 350000
-entry_start_valid: 795000
-entry_start_test: 894000
+
+# entry_start_valid: 795000
+# entry_start_test: 894000
+
+# entry_start_valid: 948831
+# entry_start_test: 998769
+
+# entry_start_valid: 494904
+# entry_start_test: 618631
+
+entry_start_valid: 2426081
+entry_start_test: 3032601
 
 num_workers: 6
 batchsize: 128
@@ -58,10 +80,25 @@ val_batchsize: 1000
 # truth_path_valid: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-470to600_TTbar_Merged/merged_train_v2_pt025_eta27_ghost.root
 # truth_path_test: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-600to800_TuneZ2_7TeV_pythia6/merged_test_small_v2_pt025_eta27_ghost.root
 
+# eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/FS_evals/
+# truth_path_train: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+# truth_path_valid: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+# truth_path_test: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+
+# eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/FS_evals/
+# truth_path_train: my_sample/Parnussus_ntuple_minbias_1_merge.root
+# truth_path_valid: my_sample/Parnussus_ntuple_minbias_1_merge.root
+# truth_path_test: my_sample/Parnussus_ntuple_minbias_1_merge.root
+
+# eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/FS_evals/
+# truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_BH1_RPScan_merge.root
+# truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_BH1_RPScan_merge.root
+# truth_path_test: my_sample/Parnussus_ntuple_minbias_1_merge.root
+
 eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/FS_evals/
-truth_path_train: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
-truth_path_valid: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
-truth_path_test: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge.root
+truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge.root
+truth_path_test: my_sample/Parnussus_ntuple_minbias_1_merge.root
 
 max_particles: 400
 
@@ -80,7 +117,8 @@ mha_config:
     bias: false
     attn_type: torch-flex
 
-var_transform: !include var_transform_ttbar_qcd.yaml
+# var_transform: !include var_transform_ttbar_qcd.yaml
+var_transform: !include var_transform_minbias_noPU.yaml
 
 truth_variables:
     - truth_pt
