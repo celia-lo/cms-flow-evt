@@ -96,8 +96,8 @@ val_batchsize: 1000
 # truth_path_test: my_sample/Parnussus_ntuple_minbias_1_merge.root
 
 eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/FS_evals/
-truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge.root
-truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge.root
+truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_rmPt_merge.root
+truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_rmPt_merge.root
 truth_path_test: my_sample/Parnussus_ntuple_minbias_1_merge.root
 
 max_particles: 400

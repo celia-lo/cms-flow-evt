@@ -238,6 +238,7 @@ def train(args, config, logger):
         max_epochs=config["num_epochs"],
         accelerator=config["accelerator"],
         devices=config["num_gpus"],
+        num_nodes=config.get("num_nodes", 1),
         logger=logger,
         log_every_n_steps=20,
         fast_dev_run=args.test_run,
@@ -316,6 +317,8 @@ def main():
 
     # parse the gpu argument and update config
     config = parse_gpus(config, args.gpus)
+    if config.get("num_nodes") is None:
+        config["num_nodes"] = int(os.environ.get("SLURM_JOB_NUM_NODES", "1"))
 
     # print job info once
     print_job_info(args, config)
