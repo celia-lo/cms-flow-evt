@@ -1,0 +1,188 @@
+logger: none
+name: fm_cms_pow_evt_net 
+sigma: 0.0001
+n_steps: 25
+train_type: evt
+flow_type: fm
+
+num_epochs: 500
+# num_epochs: 10
+learningrate: 3e-5
+opt: lion
+loss_type: mse
+
+lr_scheduler: true
+use_swa: true
+check_val_every_n_epoch: 1
+gradient_clip_val: 1.0
+truth_binary_class: false
+
+
+# reduce_ds_train: 2_800_000
+# reduce_ds_valid: 35000
+# reduce_ds_train: 300000
+# reduce_ds_valid: 50000
+# eval_num_events: 50000
+
+# QCD no PU
+# reduce_ds_train: 795000
+# reduce_ds_valid: 99000
+# eval_num_events: 99916
+
+# minbias merge 1
+# reduce_ds_train: 948831
+# reduce_ds_valid: 49938
+# eval_num_events: 49938
+
+# black hole merge
+# reduce_ds_train: 494904
+# reduce_ds_valid: 123727
+# eval_num_events: 123727
+
+# minbias no PU merge
+# reduce_ds_train: 2426081
+# reduce_ds_valid: 606520
+# eval_num_events: 606520
+
+# minbias no PU x10 merge
+# reduce_ds_train: 242608
+# reduce_ds_valid: 60652
+# eval_num_events: 60652
+
+# AL
+reduce_ds_train: 804789
+reduce_ds_valid: 143713
+eval_num_events: 57484
+
+
+entry_start_train: 0
+# entry_start_valid: 2_800_000
+# entry_start_test: 0
+# entry_start_valid: 300000
+# entry_start_test: 350000
+
+# QCD no PU
+# entry_start_valid: 795000
+# entry_start_test: 894000
+
+# minbias merge 1
+# entry_start_valid: 948831
+# entry_start_test: 998769
+
+# black hole merge
+# entry_start_valid: 494904
+# entry_start_test: 618631
+
+# minbias no PU merge
+# entry_start_valid: 2426081
+# entry_start_test: 3032601
+
+# minbias no PU x10 merge
+# entry_start_valid: 242608
+# entry_start_test: 303260
+
+# AL
+entry_start_valid: 804789
+entry_start_test: 948502
+
+num_workers: 6
+batchsize: 128
+val_batchsize: 5000
+
+# eval_dir: /storage/agrp/dmitrykl/fastsim/FS_evals/
+eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/evals/
+# truth_path_train: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-470to600_TTbar_Merged/merged_train_v2_pt025_eta27_ghost.root
+# truth_path_train: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+# truth_path_train: my_sample/Parnussus_ntuple_minbias_1_merge.root
+# truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_BH1_RPScan_merge.root
+# truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_rmPt_merge.root
+# truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge_x10.root
+truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QQB/train_evt.root
+# truth_path_valid: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-470to600_TTbar_Merged/merged_train_v2_pt025_eta27_ghost.root
+# truth_path_valid: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+# truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_BH1_RPScan_merge.root
+# truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_rmPt_merge.root
+# truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge_x10.root
+truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QQB/train_evt.root
+# truth_path_test: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-600to800_TuneZ2_7TeV_pythia6/merged_test_small_v2_pt025_eta27_ghost.root
+# truth_path_test: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
+truth_path_test: my_sample/Parnussus_ntuple_minbias_1_merge.root
+
+max_particles: 400
+time_pow: true
+use_global: true
+
+hidden_dim: 128
+global_dim: 16
+n_res_blocks: 3
+
+act: gelu
+
+var_transform:
+  ptrel:
+    min: 0.0
+    max: 0.796
+    mean: 0.006
+    std: 0.015
+  ht:
+    min: 34.629
+    max: 3301.761
+    mean: 780.979
+    std: 394.733
+  eta:
+    min: -2.7
+    max: 2.7
+    mean: -0.0
+    std: 1.29
+  phi:
+    min: -3.142
+    max: 3.142
+    mean: 0.002
+    std: 1.814
+  vx:
+    min: -198.488
+    max: 292.861
+    mean: 0.206
+    std: 0.691
+  vy:
+    min: -179.167
+    max: 168.16
+    mean: 0.331
+    std: 0.702
+  vz:
+    min: -253.811
+    max: 808.448
+    mean: 0.34
+    std: 5.73
+  npart:
+    min: 0
+    max: 400
+    mean: 165
+    std: 57.85
+  met_x:
+    min: -1e3
+    max: 1e3
+    mean: -0.21
+    std: 37.258
+  met_y:
+    min: -1e3
+    max: 1e3
+    mean: 0.075
+    std: 36.852
+truth_variables:
+    - truth_pt
+    - truth_eta
+    - truth_phi
+    - truth_vx
+    - truth_vy
+    - truth_vz
+    - truth_class
+    
+pflow_variables:
+    - pflow_pt
+    - pflow_eta
+    - pflow_phi
+    - pflow_vx
+    - pflow_vy
+    - pflow_vz
+    - pflow_class
