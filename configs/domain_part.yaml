@@ -1,0 +1,80 @@
+logger: none
+name: rcfm_domain_part
+train_type: domain_particle
+flow_type: rcfm
+loss_type: mse_and_direction
+
+# Source (ALEPH reco) and target (DELPHI reco) ROOT files.
+# Both use pflow_* branches. Update paths as needed.
+source_path_train: my_sample/QQB/train_evt.root
+source_path_valid: my_sample/QQB/train_evt.root
+target_path_train: my_sample/delphi/train_evt.root
+target_path_valid: my_sample/delphi/train_evt.root
+reduce_ds_source_train: 800000
+reduce_ds_source_valid: 50000
+reduce_ds_target_train: 800000
+reduce_ds_target_valid: 50000
+entry_start_source_train: 0
+entry_start_source_valid: 800000
+entry_start_target_train: 0
+entry_start_target_valid: 800000
+
+# Mini-batch OT pairing strategy.
+# sorted_ot  — baseline: sort both batches by Ht, pair by rank (1D OT)
+# sinkhorn   — upgrade: weighted 4D cost [Ht, n, MET_x, MET_y] + Sinkhorn + Hungarian
+ot_mode: sorted_ot
+# Per-feature weights for Sinkhorn cost: [Ht_norm, n_norm, MET_x_norm, MET_y_norm].
+# Switch ot_mode to sinkhorn and tune these when sorted_ot under-pairs events.
+ot_feature_weights: [1.0, 0.5, 0.3, 0.3]
+sinkhorn_reg: 0.05
+sinkhorn_n_iter: 50
+
+sigma: 0.0001
+n_steps: 8
+num_epochs: 300
+learningrate: 3e-5
+opt: lion
+lr_scheduler: true
+lr_scheduler_dict:
+  gamma: 0.5
+use_swa: true
+check_val_every_n_epoch: 1
+gradient_clip_val: 1.0
+sin_cos: true
+time_factor: 1000
+
+num_workers: 6
+batchsize: 128
+val_batchsize: 512
+
+# Feature set: [ptrel, eta, phi, class] (no vertex).
+# truth_variables = source (ALEPH reco); pflow_variables = target (DELPHI reco).
+# Both lists must have the same length to keep source/target feature dims equal.
+truth_variables:
+  - reco_ptrel
+  - reco_eta
+  - reco_phi
+  - reco_class
+pflow_variables:
+  - reco_ptrel
+  - reco_eta
+  - reco_phi
+  - reco_class
+
+# FlowNet architecture
+max_particles: 400
+hidden_dim: 96
+# global_dim = 4: [Ht_norm, n_norm, MET_x_norm, MET_y_norm]
+global_dim: 4
+act: silu
+ca_type: double
+num_dit_layers: 8
+num_heads: 6
+mha_config:
+  do_qk_norm: true
+  bias: false
+  attn_type: torch-meff    # no 128-multiple constraint for non-flex attention
+
+var_transform: !include var_transform_domain.yaml
+
+eval_dir: evals/

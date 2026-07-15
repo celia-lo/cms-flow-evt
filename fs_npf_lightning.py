@@ -430,15 +430,16 @@ class FlowNumPFLightning(LightningModule):
                 **kwargs,
             )
 
+        max_npart = self.config.get("max_particles", 400)
         bins = {
             "ht": np.linspace(0, 3000, 100),
             "met_x": np.linspace(-100, 100, 100),
             "met_y": np.linspace(-100, 100, 100),
-            "npart": np.linspace(0.5, 400.5, 100),
+            "npart": np.linspace(0.5, max_npart + 0.5, 100),
         }
         res_bins = {
             "ht": np.linspace(-2, 1, 50),
-            "npart": np.linspace(-250, 150, 50),
+            "npart": np.linspace(-max_npart // 4, max_npart // 8, 50),
             "met_x": np.linspace(-100, 100, 50),
             "met_y": np.linspace(-100, 100, 50),
         }

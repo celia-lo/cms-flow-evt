@@ -1,0 +1,42 @@
+# Placeholder var_transform for ALEPH→DELPHI domain translation.
+# Generated from ALEPH QQB reco sample as a starting point.
+# Regenerate with proper combined ALEPH+DELPHI stats:
+#   python make_var_transform_domain.py \
+#     --aleph my_sample/QQB/train_evt.root \
+#     --delphi my_sample/delphi/train_evt.root \
+#     --out configs/var_transform_domain.yaml
+ptrel:
+  min: 0.0
+  max: 0.796
+  mean: 0.006
+  std: 0.015
+ht:
+  min: 34.629
+  max: 3301.761
+  mean: 780.979
+  std: 394.733
+eta:
+  min: -2.7
+  max: 2.7
+  mean: -0.0
+  std: 1.29
+phi:
+  min: -3.142
+  max: 3.142
+  mean: 0.002
+  std: 1.814
+npart:
+  min: 0
+  max: 400
+  mean: 165
+  std: 57.85
+met_x:
+  min: -1000.0
+  max: 1000.0
+  mean: -0.21
+  std: 37.258
+met_y:
+  min: -1000.0
+  max: 1000.0
+  mean: 0.075
+  std: 36.852

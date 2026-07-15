@@ -148,6 +148,23 @@ class FlowLightning(LightningModule):
             if var == "pflow_pt":
                 self.pflow_variables[i] = "pflow_ptrel"
 
+        self.truth_variables = [
+            el
+            for el in self.config.get(
+                "truth_variables",
+                [
+                    "truth_pt",
+                    "truth_eta",
+                    "truth_phi",
+                ],
+            )
+        ]
+        for i, var in enumerate(self.truth_variables):
+            if var == "truth_pt":
+                self.truth_variables[i] = "truth_ptrel"
+
+        self.sin_cos = self.config.get("sin_cos", False)
+
         self.var_transform_dict = {
             key: VarTransform(key, val)
             for key, val in self.config["var_transform"].items()
@@ -201,8 +218,73 @@ class FlowLightning(LightningModule):
             skip_type="time_uniform_flow",
         )
 
+    def _expanded_var_names(self, variables):
+        """
+        Expand truth/pflow_variables (e.g. [ptrel, eta, phi, vx, vy, vz, class]) into
+        the per-channel names matching the tensors actually fed to the network, i.e.
+        after phi -> (sin_phi, cos_phi) (if sin_cos) and class -> 5-way one-hot.
+        """
+        names = []
+        for var in variables:
+            base = var.replace("truth_", "").replace("pflow_", "")
+            if base == "phi" and self.sin_cos:
+                names += ["sin_phi", "cos_phi"]
+            elif base == "class":
+                names += [f"class_{i}" for i in range(5)]
+            else:
+                names.append(base)
+        return names
+
     def training_step(self, data, batch_idx):
         loss = self.forward(data)
+
+        if torch.isnan(loss) or torch.isinf(loss):
+            truth, pflow, mask, global_data = data
+            dump_path = (
+                f"nan_batch_epoch{self.current_epoch}"
+                f"_step{self.global_step}_rank{self.global_rank}.pt"
+            )
+            torch.save(
+                {
+                    "epoch": self.current_epoch,
+                    "global_step": self.global_step,
+                    "batch_idx": batch_idx,
+                    "truth": truth.detach().cpu(),
+                    "pflow": pflow.detach().cpu(),
+                    "mask": mask.detach().cpu(),
+                    "global_data": global_data.detach().cpu(),
+                    "truth_variables": self.truth_variables,
+                    "pflow_variables": self.pflow_variables,
+                },
+                dump_path,
+            )
+            print(f"[NaN DETECTED] epoch={self.current_epoch} step={self.global_step} "
+                  f"batch_idx={batch_idx} rank={self.global_rank} loss={loss.item()} "
+                  f"-- skipping batch")
+            print(f"  dumped batch to {dump_path}")
+
+            def per_channel(name, t, var_names):
+                t = t.detach()
+                for i in range(t.shape[-1]):
+                    ch = t[..., i]
+                    vn = var_names[i] if i < len(var_names) else f"ch{i}"
+                    print(f"    {name}[{i}]={vn}: min={ch.min().item():.4g} "
+                          f"max={ch.max().item():.4g} "
+                          f"nan={torch.isnan(ch).sum().item()} "
+                          f"inf={torch.isinf(ch).sum().item()}")
+
+            per_channel("truth", truth, self._expanded_var_names(self.truth_variables))
+            per_channel("pflow", pflow, self._expanded_var_names(self.pflow_variables))
+            for i in range(global_data.shape[-1]):
+                ch = global_data[..., i].detach()
+                print(f"    global_data[{i}]: min={ch.min().item():.4g} "
+                      f"max={ch.max().item():.4g} "
+                      f"nan={torch.isnan(ch).sum().item()} "
+                      f"inf={torch.isinf(ch).sum().item()}")
+
+            # Skip this batch's optimizer step rather than crashing the whole run
+            # (a hard crash here would trigger the chain sbatch's requeue-crash loop).
+            return None
 
         self.log(
             "train_loss",

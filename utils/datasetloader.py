@@ -121,7 +121,7 @@ class FastSimDataset(Dataset):
         if reduce_ds < 1.0 and reduce_ds > 0:
             self.nevents = int(self.nevents * reduce_ds)
         if reduce_ds >= 1.0:
-            self.nevents = reduce_ds
+            self.nevents = min(int(reduce_ds), self.tree.num_entries)
         print(" we have ", self.nevents, " events")
 
         self.n_particle_mask = None
@@ -131,6 +131,9 @@ class FastSimDataset(Dataset):
 
         if self.mode == "train":
             self._load_pflow()
+
+        num_removed = len(self.n_truth_particles) - self.n_particle_mask.sum()
+        print(f"[Dataset] Removed {num_removed} invalid events with zero or too many particles")
 
         self._data_to_tensor(mask_events=True)
 
@@ -192,20 +195,19 @@ class FastSimDataset(Dataset):
 
     def _get_scaled_global_data(self):
         if self.train_type == "particle" and self.mode == "train":
+            # Clamp MET before transforming to prevent extreme outliers (e.g. high-pT QCD
+            # events with |MET| up to 6415 GeV) from producing NaN gradients in the transformer.
+            met_clamp = self.config.get("met_clamp", 1000.0)
+            truth_met_x = torch.clamp(self.full_data_array["truth_met_x"], -met_clamp, met_clamp)
+            truth_met_y = torch.clamp(self.full_data_array["truth_met_y"], -met_clamp, met_clamp)
+            pflow_met_x = torch.clamp(self.full_data_array["pflow_met_x"], -met_clamp, met_clamp)
+            pflow_met_y = torch.clamp(self.full_data_array["pflow_met_y"], -met_clamp, met_clamp)
             self.scaled_global_data = torch.stack(
                 [
-                    self.var_transform_dict["met_x"].transform(
-                        self.full_data_array["truth_met_x"]
-                    ),
-                    self.var_transform_dict["met_y"].transform(
-                        self.full_data_array["truth_met_y"]
-                    ),
-                    self.var_transform_dict["met_x"].transform(
-                        self.full_data_array["pflow_met_x"]
-                    ),
-                    self.var_transform_dict["met_y"].transform(
-                        self.full_data_array["pflow_met_y"]
-                    ),
+                    self.var_transform_dict["met_x"].transform(truth_met_x),
+                    self.var_transform_dict["met_y"].transform(truth_met_y),
+                    self.var_transform_dict["met_x"].transform(pflow_met_x),
+                    self.var_transform_dict["met_y"].transform(pflow_met_y),
                     self.var_transform_dict["npart"].transform(
                         torch.tensor(self.n_truth_particles)
                     ),
@@ -254,6 +256,18 @@ class FastSimDataset(Dataset):
                 value = torch.clamp(value, -3, 3)
             elif "phi" in var:
                 value = normalize(value)
+            elif "vx" in var or "vy" in var:
+                # Clamp transverse secondary-vertex positions.
+                # Full CMS-sim pileup data can have K0S/Lambda decay vertices at ±300mm
+                # (±420σ after standardization), which produces NaN gradients.
+                # vtx_xy_clamp defaults to no clamping (for Delphes/noPU data that has vx≈0).
+                vtx_xy_clamp = self.config.get("vtx_xy_clamp", None)
+                if vtx_xy_clamp is not None:
+                    value = torch.clamp(value, -vtx_xy_clamp, vtx_xy_clamp)
+            elif "vz" in var:
+                vtx_z_clamp = self.config.get("vtx_z_clamp", None)
+                if vtx_z_clamp is not None:
+                    value = torch.clamp(value, -vtx_z_clamp, vtx_z_clamp)
             self.full_data_array[var] = value
 
     def _load_truth(self):
@@ -264,12 +278,18 @@ class FastSimDataset(Dataset):
             entry_stop=self.nevents + self.entry_start,
             entry_start=self.entry_start,
         )
+        # if self.n_particle_mask is None:
+        #     self.n_particle_mask = self.n_truth_particles < self.max_particles
+        # else:
+        #     self.n_particle_mask = self.n_particle_mask & (
+        #         self.n_truth_particles < self.max_particles
+        #     )
+        truth_valid_mask = (self.n_truth_particles < self.max_particles) & (self.n_truth_particles > 0)
+
         if self.n_particle_mask is None:
-            self.n_particle_mask = self.n_truth_particles < self.max_particles
+            self.n_particle_mask = truth_valid_mask
         else:
-            self.n_particle_mask = self.n_particle_mask & (
-                self.n_truth_particles < self.max_particles
-            )
+            self.n_particle_mask = self.n_particle_mask & truth_valid_mask
 
         for var in tqdm(self.truth_variables):
             self.full_data_array[var] = self.tree[var].array(
@@ -312,16 +332,23 @@ class FastSimDataset(Dataset):
             entry_stop=self.nevents + self.entry_start,
             entry_start=self.entry_start,
         )
+        # if self.n_particle_mask is None:
+        #     self.n_particle_mask = (self.n_pflow_particles < self.max_particles) & (
+        #         self.n_pflow_particles > 0
+        #     )
+        # else:
+        #     self.n_particle_mask = (
+        #         self.n_particle_mask
+        #         & (self.n_pflow_particles < self.max_particles)
+        #         & (self.n_pflow_particles > 0)
+        #     )
+
+        pflow_valid_mask = (self.n_pflow_particles < self.max_particles) & (self.n_pflow_particles > 0)
+
         if self.n_particle_mask is None:
-            self.n_particle_mask = (self.n_pflow_particles < self.max_particles) & (
-                self.n_pflow_particles > 0
-            )
+            self.n_particle_mask = pflow_valid_mask
         else:
-            self.n_particle_mask = (
-                self.n_particle_mask
-                & (self.n_pflow_particles < self.max_particles)
-                & (self.n_pflow_particles > 0)
-            )
+            self.n_particle_mask = self.n_particle_mask & pflow_valid_mask
 
         for var in tqdm(self.pflow_variables):
             self.full_data_array[var] = self.tree[var].array(
@@ -387,7 +414,7 @@ class FastSimDataset(Dataset):
             var_name = key.replace("truth_", "")
             if var_name == "class":
                 truth_data[var_name] = F.one_hot(
-                    truth_vars[var_name][truth_idx], 5
+                    truth_vars[var_name][truth_idx].long(), 5
                 ).float()
                 continue
             var_transform = self.var_transform_dict[var_name]
@@ -469,8 +496,8 @@ class FastSimDataset(Dataset):
         )
         pflow_data = do_padding(pflow_data, self.max_particles)
         mask = torch.stack([truth_mask, pflow_mask], -1)
-        # mask = mask.bool()
-        mask = mask.to(torch.float32)
+        mask = mask.bool()
+        # mask = mask.to(torch.float32)
 
         global_data = torch.stack(list(global_data.values()), -1).to(torch.float32)
 
@@ -557,7 +584,7 @@ class FastSimDataset(Dataset):
             truth_mask = torch.zeros(self.max_particles, dtype=bool)
             global_data = torch.zeros_like(global_data).float()
 
-        truth_mask = truth_mask.to(torch.float32)
+        # truth_mask = truth_mask.to(torch.float32)
         return truth_data, pflow_data, truth_mask, global_data
 
     def get_eval_data(self, idx):
@@ -595,38 +622,38 @@ class FastSimDataset(Dataset):
     def __len__(self):
         return len(self.n_truth_particles)
 
-    # def __getitem__(self, idx):
-    #     if self.mode == "eval":
-    #         return self.get_eval_data(idx)
-    #     if self.train_type == "particle":
-    #         return self.get_particle_data(idx)
-    #     elif self.train_type == "evt":
-    #         return self.get_event_data(idx)
     def __getitem__(self, idx):
         if self.mode == "eval":
-            item = self.get_eval_data(idx)
-        elif self.train_type == "particle":
-            item = self.get_particle_data(idx)
+            return self.get_eval_data(idx)
+        if self.train_type == "particle":
+            return self.get_particle_data(idx)
         elif self.train_type == "evt":
-            item = self.get_event_data(idx)
-        else:
-            raise ValueError(f"Unknown train_type: {self.train_type}")
+            return self.get_event_data(idx)
+    # def __getitem__(self, idx):
+    #     if self.mode == "eval":
+    #         item = self.get_eval_data(idx)
+    #     elif self.train_type == "particle":
+    #         item = self.get_particle_data(idx)
+    #     elif self.train_type == "evt":
+    #         item = self.get_event_data(idx)
+    #     else:
+    #         raise ValueError(f"Unknown train_type: {self.train_type}")
 
-        self.type_check_debug(item, idx)
-        return item
+    #     self.type_check_debug(item, idx)
+    #     return item
 
-    def type_check_debug(self, item, idx):
-        if isinstance(item, tuple):
-            iterator = enumerate(item)
-        elif isinstance(item, dict):
-            iterator = item.items()
-        else:
-            print(f"⚠️ Skipping check: unexpected type at idx {idx}: {type(item)}")
-            return
+    # def type_check_debug(self, item, idx):
+    #     if isinstance(item, tuple):
+    #         iterator = enumerate(item)
+    #     elif isinstance(item, dict):
+    #         iterator = item.items()
+    #     else:
+    #         print(f"⚠️ Skipping check: unexpected type at idx {idx}: {type(item)}")
+    #         return
 
-        for k, v in iterator:
-            if isinstance(v, torch.Tensor) and v.dtype == torch.bool:
-                print(f"\n❌ Boolean tensor at idx {idx}")
-                print(f"Key: {k}, Shape: {v.shape}, Sample values: {v.flatten()[:10]}")
-                torch.save({"idx": idx, "key": k, "data": v, "full_item": item}, f"bad_event_{idx}.pt")
-                raise TypeError(f"Boolean tensor in batch (key: {k}) at idx {idx}")
+    #     for k, v in iterator:
+    #         if isinstance(v, torch.Tensor) and v.dtype == torch.bool:
+    #             print(f"\n❌ Boolean tensor at idx {idx}")
+    #             print(f"Key: {k}, Shape: {v.shape}, Sample values: {v.flatten()[:10]}")
+    #             torch.save({"idx": idx, "key": k, "data": v, "full_item": item}, f"bad_event_{idx}.pt")
+    #             raise TypeError(f"Boolean tensor in batch (key: {k}) at idx {idx}")

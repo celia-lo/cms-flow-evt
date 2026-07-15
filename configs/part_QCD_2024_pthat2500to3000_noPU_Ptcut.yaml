@@ -1,0 +1,91 @@
+logger: none
+name: rcfm_cms_part_QCD_noPU_pthat2500
+sigma: 0.0001
+n_steps: 10
+train_type: particle
+flow_type: rcfm
+model_type: knn
+use_knn: false
+
+num_epochs: 100
+learningrate: 3e-5
+opt: lion
+loss_type: mse_and_direction
+
+lr_scheduler: true
+lr_scheduler_dict:
+    gamma: 0.5
+
+use_swa: true
+check_val_every_n_epoch: 1
+gradient_clip_val: 1.0
+train_class: true
+use_global: true
+zero_neutral_vtx: true
+use_scale_info: true
+
+sin_cos: true
+
+time_factor: 1000
+
+# QCD_2024_pthat2500to3000_noPU_Ptcut (train_evt.root: 989952, test_evt.root: 10000)
+# npflow: mean=132.7, p95=217, p99=263, max=471
+reduce_ds_train: 791962
+reduce_ds_valid: 197990
+eval_num_events: 10000
+
+entry_start_train: 0
+entry_start_valid: 791962
+entry_start_test: 0
+
+num_workers: 6
+batchsize: 128
+val_batchsize: 1000
+
+eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/evals/
+truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QCD_2024_pthat2500to3000_noPU_Ptcut/train_evt.root
+truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QCD_2024_pthat2500to3000_noPU_Ptcut/train_evt.root
+truth_path_test: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QCD_2024_pthat2500to3000_noPU_Ptcut/test_evt.root
+
+# max npflow=471; 512=128x4 keeps all events (upstream default is 400)
+max_particles: 512
+
+# pflow_vx/vy/vz have a long tail (finite range up to ~±420mm for vz, plus a
+# handful of literal +-inf events from track-fit singularities). Clamp before
+# normalization to avoid inf/extreme inputs poisoning the Lion optimizer.
+vtx_xy_clamp: 10.0
+vtx_z_clamp: 20.0
+
+hidden_dim: 96
+global_dim: 20
+
+act: silu
+ca_type: double
+
+num_dit_layers: 8
+
+num_heads: 6
+mha_config:
+    do_qk_norm: true
+    bias: false
+    attn_type: torch-flex
+
+var_transform: !include var_transform_QCD_2024_pthat2500to3000_noPU_Ptcut.yaml
+
+truth_variables:
+    - truth_pt
+    - truth_eta
+    - truth_phi
+    - truth_vx
+    - truth_vy
+    - truth_vz
+    - truth_class
+
+pflow_variables:
+    - pflow_pt
+    - pflow_eta
+    - pflow_phi
+    - pflow_vx
+    - pflow_vy
+    - pflow_vz
+    - pflow_class

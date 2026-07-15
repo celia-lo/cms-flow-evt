@@ -87,13 +87,13 @@ loader = DataLoader(
 n_events = len(dataset)
 l_tr_data = {
     key.replace("pflow_", "").replace("ptrel", "pt"): np.zeros(
-        (n_events, dataset.max_particles)
+        (n_events, dataset.max_particles), dtype=np.float32
     )
     for key in net.pflow_variables + ["ind"]
 }
 l_fs_data = {
     key.replace("pflow_", "").replace("ptrel", "pt"): np.zeros(
-        (n_events, dataset.max_particles)
+        (n_events, dataset.max_particles), dtype=np.float32
     )
     for key in net.pflow_variables + ["ind"]
 }
@@ -159,7 +159,7 @@ for i, batch in tqdm(enumerate(loader), total=len(loader)):
     pf_ht_pred = pred[..., 0]
 
     good_idxs = idxs[
-        (pf_ht_pred > -ht_mean / ht_std) & (n_pf_pred > 0) & (n_pf_pred < 400)
+        (pf_ht_pred > -ht_mean / ht_std) & (n_pf_pred > 0) & (n_pf_pred < dataset.max_particles)
     ]
 
     pf_ht_pred[pf_ht_pred < -ht_mean / ht_std] = global_data[..., -1][
@@ -168,7 +168,7 @@ for i, batch in tqdm(enumerate(loader), total=len(loader)):
 
     n_tr = truth_mask.sum(-1).int()
     n_pf_pred[n_pf_pred < 1] = n_tr[n_pf_pred < 1]
-    n_pf_pred[n_pf_pred > 400] = n_tr[n_pf_pred > 400]
+    n_pf_pred[n_pf_pred > dataset.max_particles] = n_tr[n_pf_pred > dataset.max_particles]
 
     pf_met_x_pred = pred[..., 2]
     pf_met_y_pred = pred[..., 3]

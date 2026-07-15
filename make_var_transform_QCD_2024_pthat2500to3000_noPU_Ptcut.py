@@ -8,9 +8,13 @@ import yaml
 
 MAX_PARTICLES = 2048
 ROOT_FILE = Path(
-    "/global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/minbias_2024_60PU_noPtcut/train_evt.root"
+    "/global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QCD_2024_pthat2500to3000_noPU_Ptcut/train_evt.root"
 )
-OUT_YAML = Path("configs/var_transform_minbias_60PU.yaml")
+OUT_YAML = Path("configs/var_transform_QCD_2024_pthat2500to3000_noPU_Ptcut.yaml")
+
+# MET clamped at ±1000 GeV before stat computation (and at runtime in datasetloader.py)
+# so extreme QCD met outliers (up to ±6415 GeV) don't inflate std and cause NaN gradients.
+MET_CLAMP = 1000.0
 
 
 class RunningStats:
@@ -53,10 +57,6 @@ class RunningStats:
 stats = {name: RunningStats() for name in
          ["ptrel", "ht", "eta", "phi", "vx", "vy", "vz", "npart", "met_x", "met_y"]}
 
-# truth branches: per-particle features (eta, phi, vx, vy, vz, ptrel)
-# pflow branches: npart, ht, met — evt model predicts pflow quantities,
-# so these must be calibrated to pflow, not truth (critical for PU samples
-# where npflow >> ntruth)
 branches = [
     "truth_pt", "truth_eta", "truth_phi",
     "truth_vx", "truth_vy", "truth_vz", "ntruth",
@@ -99,17 +99,36 @@ for arrays in uproot.iterate(tree, branches, step_size=10000, library="ak"):
     stats["vz"].update(ak.to_numpy(ak.flatten(vz)))
 
     # event-level quantities from pflow (evt model targets)
-    pflow_ht = ak.sum(pflow_pt, axis=-1)
+    pflow_ht = ak.to_numpy(ak.sum(pflow_pt, axis=-1))
     stats["npart"].update(ak.to_numpy(npflow))
-    stats["ht"].update(ak.to_numpy(pflow_ht))
+    # ht: apply log before computing stats so fn: log in var_transform
+    # compresses extreme high-pT QCD outliers (raw max ~17813 GeV → ~30σ without log,
+    # but only ~4σ after log-transform).
+    stats["ht"].update(np.log(pflow_ht[pflow_ht > 0]))
 
-    met_x = ak.sum(pflow_pt * np.cos(pflow_phi), axis=-1)
-    met_y = ak.sum(pflow_pt * np.sin(pflow_phi), axis=-1)
-    stats["met_x"].update(ak.to_numpy(met_x))
-    stats["met_y"].update(ak.to_numpy(met_y))
+    met_x = ak.to_numpy(ak.sum(pflow_pt * np.cos(pflow_phi), axis=-1))
+    met_y = ak.to_numpy(ak.sum(pflow_pt * np.sin(pflow_phi), axis=-1))
+    # clamp met at ±MET_CLAMP before computing stats — matches QQB's natural met range
+    # and prevents extreme outliers (up to ±6415 GeV) from inflating std.
+    stats["met_x"].update(np.clip(met_x, -MET_CLAMP, MET_CLAMP))
+    stats["met_y"].update(np.clip(met_y, -MET_CLAMP, MET_CLAMP))
 
 print(f"Selected events: {selected}")
 
 results = {name: stats[name].finalize() for name in stats}
-yaml.safe_dump(results, OUT_YAML.open("w"), sort_keys=False)
+
+# Write YAML with fn: log annotation for ht (stats are in log-space)
+# and met_clamp metadata (informational — runtime clamping done in datasetloader.py)
+out = {}
+for name, vals in results.items():
+    entry = dict(vals)
+    if name == "ht":
+        entry["fn"] = "log"
+    out[name] = entry
+
+yaml.safe_dump(out, OUT_YAML.open("w"), sort_keys=False)
 print(f"Wrote {OUT_YAML}")
+print()
+print("Note: met_x/met_y stats computed from values clamped at ±1000 GeV.")
+print("Runtime clamping at ±1000 GeV must be applied in datasetloader.py")
+print("(see _get_scaled_global_data) to match these stats.")

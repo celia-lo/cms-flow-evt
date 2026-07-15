@@ -1,0 +1,50 @@
+ptrel:
+  min: 0.0
+  max: 1.0
+  mean: 0.013
+  std: 0.028
+ht:
+  min: 8.031
+  max: 1923.819
+  mean: 971.456
+  std: 272.566
+eta:
+  min: -2.7
+  max: 2.7
+  mean: 0.0
+  std: 1.569
+phi:
+  min: -3.142
+  max: 3.142
+  mean: -0.001
+  std: 1.814
+vx:
+  min: -198.488
+  max: 292.861
+  mean: 0.206
+  std: 0.691
+vy:
+  min: -179.167
+  max: 168.160
+  mean: 0.331
+  std: 0.702
+vz:
+  min: -253.811
+  max: 808.448
+  mean: 0.340
+  std: 5.730
+npart:
+  min: 18.0
+  max: 2047.0
+  mean: 1299.59
+  std: 340.562
+met_x:
+  min: -642.321
+  max: 315.24
+  mean: -2.257
+  std: 26.119
+met_y:
+  min: -267.789
+  max: 173.387
+  mean: 3.488
+  std: 26.205

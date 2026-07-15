@@ -1,0 +1,70 @@
+logger: none
+name: fm_domain_evt
+train_type: domain_evt
+flow_type: fm
+loss_type: mse
+
+# Source (ALEPH reco) and target (DELPHI reco) ROOT files.
+source_path_train: my_sample/QQB/train_evt.root
+source_path_valid: my_sample/QQB/train_evt.root
+target_path_train: my_sample/delphi/train_evt.root
+target_path_valid: my_sample/delphi/train_evt.root
+reduce_ds_source_train: 800000
+reduce_ds_source_valid: 50000
+reduce_ds_target_train: 800000
+reduce_ds_target_valid: 50000
+entry_start_source_train: 0
+entry_start_source_valid: 800000
+entry_start_target_train: 0
+entry_start_target_valid: 800000
+
+# Mini-batch OT pairing strategy.
+# sorted_ot  — baseline: sort both batches by Ht, pair by rank (1D OT)
+# sinkhorn   — upgrade: weighted 4D cost [Ht, n, MET_x, MET_y] + Sinkhorn + Hungarian
+ot_mode: sorted_ot
+ot_feature_weights: [1.0, 0.5, 0.3, 0.3]
+sinkhorn_reg: 0.05
+sinkhorn_n_iter: 50
+
+sigma: 0.0001
+# noisy_dim = 4: [Ht_target, n_target, MET_x_target, MET_y_target]
+noisy_dim: 4
+n_steps: 25
+num_epochs: 400
+learningrate: 3e-5
+opt: lion
+lr_scheduler: true
+lr_scheduler_dict:
+  gamma: 0.5
+use_swa: true
+check_val_every_n_epoch: 1
+gradient_clip_val: 1.0
+sin_cos: true
+
+num_workers: 6
+batchsize: 256
+val_batchsize: 1024
+
+# Feature set: same as domain_part.yaml
+truth_variables:
+  - reco_ptrel
+  - reco_eta
+  - reco_phi
+  - reco_class
+pflow_variables:
+  - reco_ptrel
+  - reco_eta
+  - reco_phi
+  - reco_class
+
+# FlowNumPFNet architecture
+max_particles: 400
+hidden_dim: 128
+# global_dim = 4: [Ht_source, n_source, MET_x_source, MET_y_source]
+global_dim: 4
+n_res_blocks: 3
+act: silu
+
+var_transform: !include var_transform_domain.yaml
+
+eval_dir: evals/

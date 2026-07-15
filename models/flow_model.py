@@ -244,8 +244,10 @@ class FlowNet(nn.Module):
         timestep,
         global_data=None,
     ):
-        truth_mask = mask[..., 0]
-        fs_mask = mask[..., 1]
+        # truth_mask = mask[..., 0]
+        # fs_mask = mask[..., 1]
+        truth_mask = mask[..., 0].bool()
+        fs_mask = mask[..., 1].bool()
 
         fs_data_ = fs_data
         truth_data_ = truth_data

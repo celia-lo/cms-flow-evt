@@ -1,5 +1,6 @@
 import argparse
 import glob
+import math
 import os
 import resource
 import socket
@@ -19,7 +20,9 @@ from lightning.pytorch.profilers import AdvancedProfiler
 
 import utils.fileutils as fu
 from fs_lightning import FlowLightning
+from fs_lightning_stream import FlowLightningStreaming
 from fs_npf_lightning import FlowNumPFLightning
+
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
@@ -33,100 +36,40 @@ yaml.add_constructor(
 
 
 def parse_args():
-    """
-    Argument parser for training script.
-    """
     parser = argparse.ArgumentParser(description="Train the Diffusion tagger.")
-
-    parser.add_argument(
-        "-c", "--config", required=True, type=str, help="Path to config file."
-    )
-    parser.add_argument(
-        "--gpus", default="", type=str, help="Comma separated list of GPUs to use."
-    )
-    parser.add_argument(
-        "--ckpt_path", type=str, help="Restart training from a checkpoint."
-    )
-    parser.add_argument(
-        "--test_run",
-        action="store_true",
-        default=False,
-        help="No logging, checkpointing, test on a few jets.",
-    )
-    parser.add_argument("--batch_size", type=int, help="Overwrite config batch size.")
-    parser.add_argument(
-        "--reduce_dataset", type=float, help="Modify dataset size on the fly."
-    )
-    parser.add_argument("--num_workers", type=int, help="Overwrite config num workers.")
-    parser.add_argument("--num_epochs", type=int, help="Overwrite config num epochs.")
-    parser.add_argument(
-        "--no_logging", action="store_true", help="Disable the logging framework."
-    )
-    parser.add_argument(
-        "--profile", action="store_true", help="Enable profiling of the code."
-    )
-    parser.add_argument(
-        "--limit_val_batches",
-        type=float,
-        help="Fraction/number of validation batches Lightning should run.",
-    )
-
-    args = parser.parse_args()
-    return args
+    parser.add_argument("-c", "--config", required=True, type=str)
+    parser.add_argument("--gpus", default="", type=str)
+    parser.add_argument("--ckpt_path", type=str)
+    parser.add_argument("--test_run", action="store_true", default=False)
+    parser.add_argument("--batch_size", type=int)
+    parser.add_argument("--reduce_dataset", type=float)
+    parser.add_argument("--num_workers", type=int)
+    parser.add_argument("--num_epochs", type=int)
+    parser.add_argument("--no_logging", action="store_true")
+    parser.add_argument("--profile", action="store_true")
+    return parser.parse_args()
 
 
 def update_config(args, config):
-    """
-    Update config with passed arguments
-    """
     for arg in vars(args):
         if getattr(args, arg) is not None:
             config[arg] = getattr(args, arg)
     return config
 
 
-# def setup_logger(args, config):
-#     """
-#     Handle logging for the DDP multi-gpu training.
-#     I think this is really a bug on comet's end that they don't
-#     automatically group the experiments...
-#     """
-
-#     # no logging
-#     if args.test_run or args.no_logging:
-#         return None
-
-#     # need to set up a new experiment
-#     comet_logger = setup_comet_logger(config, args, os.environ.get("COMET_EXP_ID"))
-#     if comet_logger.experiment.get_key():
-#         os.environ["COMET_EXP_ID"] = comet_logger.experiment.get_key()
-
-#     return comet_logger
-
-
 def setup_logger(args, config):
-    """
-    Handle logging for the DDP multi-gpu training.
-    """
-
-    # no logging
     if args.test_run or args.no_logging:
         return None
-
-    # allow disabling logger via config
     if config.get("logger", "").lower() == "none":
         return None
 
-    # need to set up a new experiment
     comet_logger = setup_comet_logger(config, args, os.environ.get("COMET_EXP_ID"))
     if comet_logger.experiment.get_key():
         os.environ["COMET_EXP_ID"] = comet_logger.experiment.get_key()
-
     return comet_logger
 
 
 def setup_comet_logger(config, args, exp_id=None):
-    # initialise logger
     comet_logger = CometLogger(
         api_key=os.environ["COMET_API_KEY"],
         save_dir="logs",
@@ -136,7 +79,6 @@ def setup_comet_logger(config, args, exp_id=None):
         experiment_key=exp_id,
     )
 
-    # log config, hyperparameters and source files
     if os.environ.get("LOCAL_RANK") is None:
         for key, value in config.items():
             if isinstance(value, dict):
@@ -163,28 +105,16 @@ def setup_comet_logger(config, args, exp_id=None):
 
 
 def get_callbacks(config, args):
-    """
-    Initialise training callbacks
-    """
-
     refresh_rate = 1 if args.test_run else 20
     callbacks = [ProgressBar(refresh_rate=refresh_rate)]
 
     assert (config.get("use_ema", False) != config["use_swa"]) or config[
         "use_ema"
-    ] == False, "Cannot use both EMA and SWA"
+    ] is False, "Cannot use both EMA and SWA"
 
-    # initialise checkpoint callback
     if not args.test_run:
-        # if 'val_jet_loss' in config['logging_losses']:
-        #     monitor_loss = 'val_jet_loss'
-        # else:
         monitor_loss = "val_loss_avg"
-
-        # filename template
         file_name = config["run_name"] + "-{epoch:02d}-{" + monitor_loss + ":.4f}"
-
-        # callback
         checkpoint_callback = ModelCheckpoint(
             monitor=monitor_loss,
             dirpath=os.path.join("saved_models/", config["run_name"], "ckpts"),
@@ -192,53 +122,44 @@ def get_callbacks(config, args):
             save_top_k=-1,
             save_last=True,
         )
-        callbacks += [checkpoint_callback]
+        callbacks.append(checkpoint_callback)
 
     if config["use_swa"]:
-        callbacks += [StochasticWeightAveraging(swa_lrs=float(config["learningrate"]))]
+        callbacks.append(StochasticWeightAveraging(swa_lrs=float(config["learningrate"])))
 
     return callbacks
 
 
 def train(args, config, logger):
-    """
-    Fit the model.
-    """
-
-    # create a new model
     if config.get("train_type", "particle") == "evt":
         lght = FlowNumPFLightning
+    elif config.get("streaming_dataset", False):
+        lght = FlowLightningStreaming
     else:
         lght = FlowLightning
 
     model = lght(config)
 
-    # log number of parametesr
     if os.environ.get("LOCAL_RANK") is None and logger is not None:
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         logger.experiment.log_parameter("trainable_params", trainable_params)
 
-    # if we pass a checkpoint file, load the previous network
     if args.ckpt_path:
-        print("Loading previously trained model from checkpoint file:", args.ckpt_path)
+        print("Loading previously trained model from checkpoint:", args.ckpt_path)
         model = lght.load_from_checkpoint(args.ckpt_path, config=config)
 
-    # share workers between GPUs
     if config["num_gpus"]:
-        config["num_workers"] = config["num_workers"] // config["num_gpus"]
+        config["num_workers"] = max(1, config["num_workers"] // config["num_gpus"])
 
-    # get callbacks
     callbacks = get_callbacks(config, args)
 
-    # create the lightening trainer
     print("Creating trainer...")
     if config.get("precision", "32-true") != "32":
         torch.set_float32_matmul_precision("medium")
-    if args.profile:
-        print("Profiling enabled")
-        profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
-    else:
-        profiler = None
+    profiler = (
+        AdvancedProfiler(dirpath=".", filename="perf_logs") if args.profile else None
+    )
+
     trainer = Trainer(
         max_epochs=config["num_epochs"],
         accelerator=config["accelerator"],
@@ -252,11 +173,9 @@ def train(args, config, logger):
         gradient_clip_val=config.get("gradient_clip_val", None),
         precision=config.get("precision", "32-true"),
         profiler=profiler,
-        limit_val_batches=config.get("limit_val_batches", 1.0),
-        # strategy="ddp",
+        num_sanity_val_steps=config.get("num_sanity_val_steps", 0),
     )
 
-    # fit model model
     print("Fitting model...")
     if args.ckpt_path:
         trainer.fit(model, ckpt_path=args.ckpt_path)
@@ -267,18 +186,12 @@ def train(args, config, logger):
 
 
 def print_job_info(args, config):
-    """
-    Print job information.
-    """
-
     if os.environ.get("LOCAL_RANK") is not None:
         return
-
     print("-" * 100)
     print("torch", torch.__version__)
     print("lightning", pytorch_lightning.__version__)
     print("cuda", torch.version.cuda)
-
     if torch.cuda.is_available():
         device_name = torch.cuda.get_device_name(torch.cuda.current_device())
         print("Visible GPUs:", args.gpus, " - ", device_name)
@@ -286,63 +199,85 @@ def print_job_info(args, config):
 
 
 def parse_gpus(config, gpus):
-    # set available GPUs based on arguments
     num_gpus = len(gpus.split(",")) if gpus != "" else None
     accelerator = "gpu" if num_gpus is not None else "cpu"
     config["accelerator"] = accelerator
     config["num_gpus"] = num_gpus
-
     return config
 
 
 def cleanup(config, model):
     print("-" * 100)
     print("Cleaning up...")
-    # keep main process only
     if model.global_rank != 0:
         sys.exit(0)
 
-    # fu.remove_files_temp(config, tag="Training")
+
+def shard_dataset_config(config):
+    if not config.get("shard_per_rank", False):
+        return False
+    world = int(os.environ.get("WORLD_SIZE", "1"))
+    rank = int(os.environ.get("RANK", "0"))
+    if world <= 1:
+        if rank == 0:
+            print("[Shard] WORLD_SIZE=1, skipping sharding")
+        return False
+
+    for tag, length_key, start_key in (
+        ("train", "reduce_ds_train", "entry_start_train"),
+        ("valid", "reduce_ds_valid", "entry_start_valid"),
+    ):
+        total = config.get(length_key)
+        if total is None:
+            continue
+        if isinstance(total, float) and total < 1.0:
+            if rank == 0:
+                print(f"[Shard] {tag}: fractional reduce_ds, skipping")
+            continue
+        total = int(total)
+        base = config.get(start_key, 0)
+        chunk = math.ceil(total / world)
+        start = base + chunk * rank
+        remaining = total - chunk * rank
+        length = min(chunk, max(remaining, 0))
+        if length <= 0:
+            raise RuntimeError(
+                f"Rank {rank} has no data for {tag}. Reduce number of ranks or disable sharding."
+            )
+        config[start_key] = start
+        config[length_key] = length
+        print(
+            f"[Shard][Rank {rank}/{world}] {tag}: start={start}, len={length}, chunk={chunk}, total={total}"
+        )
+    return True
 
 
 def main():
-    """
-    Training entry point.
-    """
-    # pytorch_lightning.seed_everything(42)
-
-    # parse args
     args = parse_args()
-
-    # read config
     with open(args.config, "r") as file:
         config = yaml.full_load(file)
 
-    # overwrite config using args
     config = update_config(args, config)
-
-    # parse the gpu argument and update config
     config = parse_gpus(config, args.gpus)
     if config.get("num_nodes") is None:
         config["num_nodes"] = int(os.environ.get("SLURM_JOB_NUM_NODES", "1"))
 
-    # print job info once
-    print_job_info(args, config)
+    sharded = shard_dataset_config(config)
+    config["_sharded_datasets"] = sharded
 
-    # setup logger
+    print_job_info(args, config)
     logger = setup_logger(args, config)
 
-    # copy files to output dir for reproducability
     if not args.test_run:
         config = fu.prep_out_dir(args, config)
 
     if args.test_run:
-        config["reduce_ds_train"] = 2 * config.get("val_batchsize", config["batchsize"])
-        config["reduce_ds_valid"] = 2 * config.get("val_batchsize", config["batchsize"])
-    # run training
+        factor = 2 * config.get("val_batchsize", config["batchsize"])
+        config["reduce_ds_train"] = factor
+        config["reduce_ds_valid"] = factor
+
     model, trainer = train(args, config, logger)
 
-    # cleanup
     if not args.test_run:
         cleanup(config, model)
 

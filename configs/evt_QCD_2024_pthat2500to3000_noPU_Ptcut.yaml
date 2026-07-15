@@ -1,0 +1,66 @@
+logger: none
+name: fm_cms_pow_evt_QCD_noPU_pthat2500
+sigma: 0.0001
+n_steps: 25
+train_type: evt
+flow_type: fm
+
+num_epochs: 500
+learningrate: 3e-5
+opt: lion
+loss_type: mse
+
+lr_scheduler: true
+use_swa: true
+check_val_every_n_epoch: 1
+gradient_clip_val: 1.0
+truth_binary_class: false
+
+# QCD_2024_pthat2500to3000_noPU_Ptcut (train_evt.root: 989952, test_evt.root: 10000)
+reduce_ds_train: 791962
+reduce_ds_valid: 197990
+eval_num_events: 10000
+
+entry_start_train: 0
+entry_start_valid: 791962
+entry_start_test: 0
+
+num_workers: 6
+batchsize: 128
+val_batchsize: 5000
+
+eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/evals/
+truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QCD_2024_pthat2500to3000_noPU_Ptcut/train_evt.root
+truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QCD_2024_pthat2500to3000_noPU_Ptcut/train_evt.root
+truth_path_test: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QCD_2024_pthat2500to3000_noPU_Ptcut/test_evt.root
+
+# max npflow=471; 512=128x4 keeps all events (upstream default is 400)
+max_particles: 512
+time_pow: true
+use_global: true
+
+hidden_dim: 128
+global_dim: 16
+n_res_blocks: 3
+
+act: gelu
+
+var_transform: !include var_transform_QCD_2024_pthat2500to3000_noPU_Ptcut.yaml
+
+truth_variables:
+    - truth_pt
+    - truth_eta
+    - truth_phi
+    - truth_vx
+    - truth_vy
+    - truth_vz
+    - truth_class
+
+pflow_variables:
+    - pflow_pt
+    - pflow_eta
+    - pflow_phi
+    - pflow_vx
+    - pflow_vy
+    - pflow_vz
+    - pflow_class

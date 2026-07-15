@@ -12,6 +12,17 @@ ROOT_FILE = Path(
 )
 OUT_YAML = Path("configs/var_transform_minbias_60PU.yaml")
 
+# Secondary vertex particles (K0S, Lambda, B-mesons) can have vx/vy up to ±300mm
+# and vz up to ±800mm. Clamp these to prevent ±400σ normalized values in the transformer.
+# B-mesons: cτ~0.5mm, typical lab decay length ~1-3mm → ±3mm captures most
+# K0S at 1 GeV: cτ=27mm, γβ~7 → decay length ~190mm → clamped to 10mm (clips K0S far decays)
+# Lambda: similar
+VTX_XY_CLAMP = 3.0   # mm — captures B-meson secondaries, clips K0S/Lambda far decays
+VTX_Z_CLAMP  = 50.0  # mm — covers K0S typical lab decay lengths in z
+
+# MET in 60PU minbias can reach -642 GeV with std=26 GeV → -24.5σ without clamping
+MET_CLAMP = 100.0   # GeV
+
 
 class RunningStats:
     def __init__(self):
@@ -45,18 +56,14 @@ class RunningStats:
         return {
             "min": float(round(self.min, 3)),
             "max": float(round(self.max, 3)),
-            "mean": float(round(mean, 3)),
-            "std": float(round(std, 3)),
+            "mean": float(round(mean, 4)),
+            "std": float(round(std, 4)),
         }
 
 
 stats = {name: RunningStats() for name in
          ["ptrel", "ht", "eta", "phi", "vx", "vy", "vz", "npart", "met_x", "met_y"]}
 
-# truth branches: per-particle features (eta, phi, vx, vy, vz, ptrel)
-# pflow branches: npart, ht, met — evt model predicts pflow quantities,
-# so these must be calibrated to pflow, not truth (critical for PU samples
-# where npflow >> ntruth)
 branches = [
     "truth_pt", "truth_eta", "truth_phi",
     "truth_vx", "truth_vy", "truth_vz", "ntruth",
@@ -76,9 +83,9 @@ for arrays in uproot.iterate(tree, branches, step_size=10000, library="ak"):
     pt      = arrays["truth_pt"][mask]
     eta     = arrays["truth_eta"][mask]
     phi     = arrays["truth_phi"][mask]
-    vx      = arrays["truth_vx"][mask]
-    vy      = arrays["truth_vy"][mask]
-    vz      = arrays["truth_vz"][mask]
+    vx_raw  = ak.to_numpy(ak.flatten(arrays["truth_vx"][mask]))
+    vy_raw  = ak.to_numpy(ak.flatten(arrays["truth_vy"][mask]))
+    vz_raw  = ak.to_numpy(ak.flatten(arrays["truth_vz"][mask]))
     ntruth  = ntruth[mask]
 
     pflow_pt  = arrays["pflow_pt"][mask]
@@ -94,22 +101,34 @@ for arrays in uproot.iterate(tree, branches, step_size=10000, library="ak"):
     stats["ptrel"].update(ak.to_numpy(ak.flatten(ptrel)))
     stats["eta"].update(ak.to_numpy(ak.flatten(eta)))
     stats["phi"].update(ak.to_numpy(ak.flatten(phi)))
-    stats["vx"].update(ak.to_numpy(ak.flatten(vx)))
-    stats["vy"].update(ak.to_numpy(ak.flatten(vy)))
-    stats["vz"].update(ak.to_numpy(ak.flatten(vz)))
 
-    # event-level quantities from pflow (evt model targets)
-    pflow_ht = ak.sum(pflow_pt, axis=-1)
+    # vx/vy: clamp to ±VTX_XY_CLAMP to avoid extreme secondary vertex outliers
+    stats["vx"].update(np.clip(vx_raw, -VTX_XY_CLAMP, VTX_XY_CLAMP))
+    stats["vy"].update(np.clip(vy_raw, -VTX_XY_CLAMP, VTX_XY_CLAMP))
+    # vz: clamp to ±VTX_Z_CLAMP
+    stats["vz"].update(np.clip(vz_raw, -VTX_Z_CLAMP, VTX_Z_CLAMP))
+
+    # event-level quantities from pflow
+    pflow_ht = ak.to_numpy(ak.sum(pflow_pt, axis=-1))
     stats["npart"].update(ak.to_numpy(npflow))
-    stats["ht"].update(ak.to_numpy(pflow_ht))
+    stats["ht"].update(pflow_ht[pflow_ht > 0])
 
-    met_x = ak.sum(pflow_pt * np.cos(pflow_phi), axis=-1)
-    met_y = ak.sum(pflow_pt * np.sin(pflow_phi), axis=-1)
-    stats["met_x"].update(ak.to_numpy(met_x))
-    stats["met_y"].update(ak.to_numpy(met_y))
+    met_x = ak.to_numpy(ak.sum(pflow_pt * np.cos(pflow_phi), axis=-1))
+    met_y = ak.to_numpy(ak.sum(pflow_pt * np.sin(pflow_phi), axis=-1))
+    stats["met_x"].update(np.clip(met_x, -MET_CLAMP, MET_CLAMP))
+    stats["met_y"].update(np.clip(met_y, -MET_CLAMP, MET_CLAMP))
 
 print(f"Selected events: {selected}")
 
 results = {name: stats[name].finalize() for name in stats}
+
+print("\nNormalized extremes (max |clamped_value - mean| / std):")
+for name, vals in results.items():
+    mn, mx, mean, std = vals["min"], vals["max"], vals["mean"], vals["std"]
+    worst = max(abs(mn - mean), abs(mx - mean)) / std
+    print(f"  {name:8s}: min={mn:10.4f}  max={mx:10.4f}  mean={mean:9.4f}  std={std:8.4f}  max_normalized={worst:.1f}σ")
+
 yaml.safe_dump(results, OUT_YAML.open("w"), sort_keys=False)
-print(f"Wrote {OUT_YAML}")
+print(f"\nWrote {OUT_YAML}")
+print(f"\nNote: vx/vy clamped at ±{VTX_XY_CLAMP}mm, vz at ±{VTX_Z_CLAMP}mm, met at ±{MET_CLAMP}GeV")
+print("Runtime clamping MUST match: set vtx_xy_clamp, vtx_z_clamp, met_clamp in configs/part.yaml")

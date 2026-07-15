@@ -1,11 +1,11 @@
 logger: none
-name: fm_cms_pow_evt_net 
+name: fm_cms_pow_evt_60PU
 sigma: 0.0001
 n_steps: 25
 train_type: evt
 flow_type: fm
 
-num_epochs: 500
+num_epochs: 400
 # num_epochs: 10
 learningrate: 3e-5
 opt: lion
@@ -40,9 +40,29 @@ truth_binary_class: false
 # eval_num_events: 123727
 
 # minbias no PU merge
-reduce_ds_train: 2426081
-reduce_ds_valid: 606520
-eval_num_events: 606520
+# reduce_ds_train: 2426081
+# reduce_ds_valid: 606520
+# eval_num_events: 606520
+
+# minbias no PU x10 merge
+# reduce_ds_train: 242608
+# reduce_ds_valid: 60652
+# eval_num_events: 60652
+
+# AL
+# reduce_ds_train: 804789
+# reduce_ds_valid: 143713
+# eval_num_events: 57484
+
+# minbias_2024_noPU_noPtcut (train_evt.root: 858513, test_evt.root: 13785)
+# reduce_ds_train: 686810
+# reduce_ds_valid: 171703
+# eval_num_events: 13785
+
+# minbias_2024_60PU_noPtcut (train_evt.root: 1144852, test_evt.root: 11997)
+reduce_ds_train: 915882
+reduce_ds_valid: 228970
+eval_num_events: 11997
 
 entry_start_train: 0
 # entry_start_valid: 2_800_000
@@ -59,16 +79,32 @@ entry_start_train: 0
 # entry_start_test: 998769
 
 # black hole merge
+# entry_start_valid: 494904
+# entry_start_test: 618631
+
+# minbias no PU merge
 # entry_start_valid: 2426081
 # entry_start_test: 3032601
 
-# minbias no PU merge
-entry_start_valid: 2426081
-entry_start_test: 3032601
+# minbias no PU x10 merge
+# entry_start_valid: 242608
+# entry_start_test: 303260
+
+# AL
+# entry_start_valid: 804789
+# entry_start_test: 948502
+
+# minbias_2024_noPU_noPtcut
+# entry_start_valid: 686810
+# entry_start_test: 0
+
+# minbias_2024_60PU_noPtcut
+entry_start_valid: 915882
+entry_start_test: 0
 
 num_workers: 6
-batchsize: 128
-val_batchsize: 5000
+batchsize: 64
+val_batchsize: 2000
 
 # eval_dir: /storage/agrp/dmitrykl/fastsim/FS_evals/
 eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/evals/
@@ -76,16 +112,32 @@ eval_dir: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/evals/
 # truth_path_train: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
 # truth_path_train: my_sample/Parnussus_ntuple_minbias_1_merge.root
 # truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_BH1_RPScan_merge.root
-truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge.root
+# truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_rmPt_merge.root
+# truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge_x10.root
+# AL
+# truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QQB/train_evt.root
 # truth_path_valid: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-470to600_TTbar_Merged/merged_train_v2_pt025_eta27_ghost.root
 # truth_path_valid: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
 # truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_BH1_RPScan_merge.root
-truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge.root
+# truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_rmPt_merge.root
+# truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/Parnassus_ntuple_minbias_noPU_merge_x10.root
+# truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/QQB/train_evt.root
 # truth_path_test: /storage/agrp/dmitrykl/fastsim/f_delphes/data/full_event/output/QCD_Pt-600to800_TuneZ2_7TeV_pythia6/merged_test_small_v2_pt025_eta27_ghost.root
 # truth_path_test: my_sample/Parnussus_ntuple_QCD_Pt-35toInf_merge_filter_class5.root
-truth_path_test: my_sample/Parnussus_ntuple_minbias_1_merge.root
+# truth_path_test: my_sample/Parnussus_ntuple_minbias_1_merge.root
 
-max_particles: 400
+# minbias_2024_noPU_noPtcut
+# truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/minbias_2024_noPU_noPtcut/train_evt.root
+# truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/minbias_2024_noPU_noPtcut/train_evt.root
+# truth_path_test: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/minbias_2024_noPU_noPtcut/test_evt.root
+
+# minbias_2024_60PU_noPtcut (npflow mean=1322, p95=1934, p99=2199)
+truth_path_train: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/minbias_2024_60PU_noPtcut/train_evt.root
+truth_path_valid: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/minbias_2024_60PU_noPtcut/train_evt.root
+truth_path_test: /global/cfs/cdirs/m3246/ylo/parnassus-hep/cms-flow-evt/my_sample/minbias_2024_60PU_noPtcut/test_evt.root
+
+# must be multiple of 128 for FlexAttention (create_block_mask); 2048=128x16 keeps ~96.7% of events
+max_particles: 2048
 time_pow: true
 use_global: true
 
@@ -96,7 +148,10 @@ n_res_blocks: 3
 act: gelu
 
 # var_transform: !include var_transform_ttbar_qcd.yaml
-var_transform: !include var_transform_minbias_noPU.yaml
+# var_transform: !include var_transform_minbias_noPU.yaml
+# var_transform: !include var_transform_blackhole.yaml
+# GENERATE FIRST: edit ROOT_FILE/OUT_YAML in make_var_transform.py then run it
+var_transform: !include var_transform_minbias_60PU.yaml
 
 truth_variables:
     - truth_pt
