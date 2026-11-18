@@ -26,6 +26,18 @@ MAX_ABS_ETA = 2.7
 TRUTH_PT_MIN = 0.5
 PFLOW_PT_MIN = 1.0
 TRUTH_NEUTRINOS = {12, 14, 16}
+# Final-state selector for these ZM4212 EDM4hep files: the MCParticles decay
+# genealogy (daughters_begin/end) is NOT populated -- every particle is a leaf
+# and the collection holds the full generator record (partons, resonances, and
+# stable finals all mixed). generatorStatus encodes the history: dividing by
+# 10000 gives categories 0 (documentation / nuclear-fragment & duplicate-lepton
+# block), 1 (stable final-state particles), 11 (decayed hadrons: pi0, K0, rho),
+# 12/13/14 (partons). Only category 1 is the physical final state -- it alone
+# conserves charge (net ~0, 93% of events exactly zero, ~42 particles/event).
+TRUTH_FINALSTATE_CATEGORY = 1
+# Kept only as a fallback classifier when MCParticles.charge is unavailable.
+# Note K+/K- are charged hadrons (class 0), and baryons are added; the primary
+# path is classify_truth_by_charge (charge-based, never emits class 5/-1).
 PDGID_CLASS = {
     211: 0,
     -211: 0,
@@ -36,8 +48,18 @@ PDGID_CLASS = {
     130: 3,
     310: 3,
     311: 3,
-    321: 3,
-    -321: 3,
+    321: 0,
+    -321: 0,
+    2212: 0,
+    -2212: 0,
+    2112: 3,
+    -2112: 3,
+    3122: 3,
+    -3122: 3,
+    3222: 0,
+    3112: 0,
+    3312: 0,
+    3334: 0,
     22: 4,
     12: -1,
     14: -1,
@@ -130,6 +152,18 @@ def parse_args() -> argparse.Namespace:
         "--track-collection",
         default="Tracks",
         help="Collection name for tracks linked to RecoParticles (default: Tracks).",
+    )
+    parser.add_argument(
+        "--truth-pt-min",
+        type=float,
+        default=TRUTH_PT_MIN,
+        help=f"Truth particle pt threshold in GeV (default: {TRUTH_PT_MIN}).",
+    )
+    parser.add_argument(
+        "--pflow-pt-min",
+        type=float,
+        default=PFLOW_PT_MIN,
+        help=f"PF candidate pt threshold in GeV (default: {PFLOW_PT_MIN}).",
     )
     return parser.parse_args()
 
@@ -235,6 +269,28 @@ def classify_truth(pdg: ak.Array) -> ak.Array:
     return classes
 
 
+def classify_truth_by_charge(pdg: ak.Array, charge: ak.Array) -> ak.Array:
+    """Charge-based truth classification for a stable final-state particle set.
+
+    Correct for a final-state selection (generatorStatus category 1) where every
+    particle is a stable species: charged -> 0 (charged hadron), neutral -> 3
+    (neutral hadron), with photon/electron/muon overrides. This auto-assigns K+/-
+    (0), protons/charged hyperons (0), and neutrons/Lambda (3) without an explicit
+    species list, and never emits class 5 or -1 (unsafe for the one_hot(...,5)
+    loader). Neutrinos are removed upstream by the neutrino mask.
+    """
+    absp = np.abs(pdg)
+    cls = ak.where(
+        charge != 0,
+        ak.zeros_like(charge, dtype=np.int32),
+        ak.full_like(charge, 3, dtype=np.int32),
+    )
+    cls = ak.where(pdg == 22, 4, cls)
+    cls = ak.where(absp == 11, 1, cls)
+    cls = ak.where(absp == 13, 2, cls)
+    return ak.values_astype(cls, np.int32)
+
+
 def classify_pflow(
     flow_type: ak.Array | None,
     charge: ak.Array | None,
@@ -267,6 +323,26 @@ def classify_pflow(
         cls = ak.where(charge != 0, ak.where(cls == 5, 0, cls), cls)
 
     return ak.values_astype(cls, np.int32)
+
+
+def _branch_types(chunk: dict) -> dict:
+    """Type spec for uproot.mktree: awkward type for jagged (per-particle)
+    branches, numpy dtype for scalar (per-event) branches."""
+    types = {}
+    for k, v in chunk.items():
+        types[k] = v.type if isinstance(v, ak.Array) else np.asarray(v).dtype
+    return types
+
+
+def _write_chunk(output, chunk: dict, first: bool) -> bool:
+    """Write one chunk, forcing a classic TTree via mktree. uproot >=5.7 writes
+    an RNTuple for plain dict assignment (`output[name] = chunk`), which the
+    training pipeline (uproot 5.6, TTree-based loader) cannot read. Returns the
+    (possibly-updated) `first` flag."""
+    if first:
+        output.mktree("evt_tree", _branch_types(chunk))
+    output["evt_tree"].extend(chunk)
+    return False
 
 
 def chunk_event_count(chunk: ak.Array | dict[str, ak.Array]) -> int:
@@ -339,6 +415,9 @@ def build_branch_map(
     branches["truth_vz"] = optional(resolver.vector, truth_collection, "vertex", "z")
     branches["truth_pdg"] = optional(resolver.scalar, truth_collection, "PDG")
     branches["truth_charge"] = optional(resolver.scalar, truth_collection, "charge")
+    branches["truth_status"] = optional(
+        resolver.scalar, truth_collection, "generatorStatus", allow=True
+    )
     branches["truth_mass"] = optional(resolver.scalar, truth_collection, "mass", allow=True)
 
     branches["pflow_px"] = optional(resolver.vector, pflow_collection, "momentum", "x")
@@ -382,6 +461,15 @@ def build_branch_map(
 
 def main() -> int:
     args = parse_args()
+
+    global TRUTH_PT_MIN, PFLOW_PT_MIN
+    TRUTH_PT_MIN = args.truth_pt_min
+    PFLOW_PT_MIN = args.pflow_pt_min
+    print(
+        f"[convert_edm4hep] pt thresholds: truth >= {TRUTH_PT_MIN}, "
+        f"pflow >= {PFLOW_PT_MIN}",
+        flush=True,
+    )
 
     input_files = resolve_input_files(args.input)
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -500,6 +588,9 @@ def main() -> int:
                 truth_charge = (
                     chunk[branch_map["truth_charge"]] if branch_map["truth_charge"] else None
                 )
+                truth_status = (
+                    chunk[branch_map["truth_status"]] if branch_map.get("truth_status") else None
+                )
                 truth_mass = (
                     chunk[branch_map["truth_mass"]] if branch_map.get("truth_mass") else None
                 )
@@ -547,7 +638,13 @@ def main() -> int:
                 if first_chunk:
                     print("[convert_edm4hep][debug] track branch keys:", branch_map.get("pflow_tracks"), branch_map.get("pflow_tracks_begin"), branch_map.get("track_d0"))
 
-                truth_cls = classify_truth(truth_pdg)
+                # Charge-based classification (correct for the stable final-state
+                # set; auto-handles K+/-, baryons, hyperons). Fall back to the PDG
+                # map only if MCParticles.charge is unavailable.
+                if truth_charge is not None:
+                    truth_cls = classify_truth_by_charge(truth_pdg, truth_charge)
+                else:
+                    truth_cls = classify_truth(truth_pdg)
                 flat_truth = ak.flatten(truth_pdg, axis=None)
                 neutrino_mask_flat = np.isin(
                     np.abs(ak.to_numpy(flat_truth)), list(TRUTH_NEUTRINOS)
@@ -557,10 +654,24 @@ def main() -> int:
                 truth_eta_flat = ak.flatten(truth_eta, axis=None)
                 truth_eta_abs = ak.Array(np.abs(ak.to_numpy(truth_eta_flat)))
                 truth_eta_abs = ak.unflatten(truth_eta_abs, ak.num(truth_eta, axis=1))
+                # Final-state selection: generatorStatus category 1 (see the
+                # TRUTH_FINALSTATE_CATEGORY note). This is what removes partons,
+                # resonances (pi0/K0/rho), and the cat-0 documentation/nuclear
+                # block, and is required for charge conservation. If the branch is
+                # absent, fall back to "has a mapped, non-residual class".
+                if truth_status is not None:
+                    final_state_mask = (truth_status // 10000) == TRUTH_FINALSTATE_CATEGORY
+                else:
+                    print(
+                        "[convert_edm4hep] WARNING: generatorStatus not found; "
+                        "falling back to PDG-class final-state selection.",
+                        flush=True,
+                    )
+                    final_state_mask = truth_cls != 5
                 truth_keep = (
                     (truth_eta_abs <= MAX_ABS_ETA)
                     & (~neutrino_mask)
-                    & (truth_cls != 5)
+                    & final_state_mask
                     & (truth_pt >= TRUTH_PT_MIN)
                 )
                 truth_pt = truth_pt[truth_keep]
@@ -674,11 +785,7 @@ def main() -> int:
 
                 out_chunk = {k: v for k, v in out_chunk.items() if v is not None}
 
-                if first_chunk:
-                    output["evt_tree"] = out_chunk
-                    first_chunk = False
-                else:
-                    output["evt_tree"].extend(out_chunk)
+                first_chunk = _write_chunk(output, out_chunk, first_chunk)
 
                 print(
                     f"[convert_edm4hep] processed {processed} events total",
